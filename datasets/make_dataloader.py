@@ -10,10 +10,14 @@ from .msmt17 import MSMT17
 from .sampler_ddp import RandomIdentitySampler_DDP
 import torch.distributed as dist
 from .mm import MM
+from .dukemtmc import DukeMTMC
+from .ustc import USTC
 __factory = {
     'market1501': Market1501,
     'msmt17': MSMT17,
     'mm': MM,
+    'dukemtmc': DukeMTMC,
+    'ustc': USTC,
 }
 
 def train_collate_fn(batch):

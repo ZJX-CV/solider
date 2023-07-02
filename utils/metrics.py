@@ -44,6 +44,8 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
     all_cmc = []
     all_AP = []
     num_valid_q = 0.  # number of valid query
+    # from IPython import embed
+    # embed()
     for q_idx in range(num_q):
         # get query pid and camid
         q_pid = q_pids[q_idx]
@@ -76,6 +78,8 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
         tmp_cmc = np.asarray(tmp_cmc) * orig_cmc
         AP = tmp_cmc.sum() / num_rel
         all_AP.append(AP)
+    # from IPython import embed
+    # embed()
 
     assert num_valid_q > 0, "Error: all query identities do not appear in gallery"
 
