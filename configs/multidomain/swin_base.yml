@@ -19,8 +19,12 @@ INPUT:
   PIXEL_STD: [0.5, 0.5, 0.5]
 
 DATASETS:
-  NAMES: ('market1501','dukemtmc')
+  NAMES: ('market1501')
   ROOT_DIR: ('path/to/msmt17/datasets')
+  # 支持多个源域
+  SOURCE_NAMES: ['market1501','dukemtmc','msmt17']
+  # 支持多个目标域（按照指定频率保存和测试模型，不用best）
+  TARGET_NAMES: ['ustc','grid','ilids','prid','viper']
 
 DATALOADER:
   SAMPLER: 'softmax_triplet'
@@ -50,4 +54,4 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
-OUTPUT_DIR: './log/multi-domain/swin_base'
+OUTPUT_DIR: './log/multi-domain/swin_base/rr/'

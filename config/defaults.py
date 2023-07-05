@@ -103,6 +103,10 @@ _C.INPUT.PADDING = 10
 _C.DATASETS = CN()
 # List of the dataset names for training, as present in paths_catalog.py
 _C.DATASETS.NAMES = ('market1501')
+# 支持多个源域
+_C.DATASETS.SOURCE_NAMES = ['market1501']
+# 支持多个目标域（按照指定频率保存和测试模型，不用best）
+_C.DATASETS.TARGET_NAMES = ['market1501']
 # Root directory where datasets should be used (and downloaded if not found)
 _C.DATASETS.ROOT_DIR = ('../data')
 _C.DATASETS.ROOT_TRAIN_DIR = ('../data')

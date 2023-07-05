@@ -12,12 +12,20 @@ import torch.distributed as dist
 from .mm import MM
 from .dukemtmc import DukeMTMC
 from .ustc import USTC
+from .grid import GRID
+from .ilids import iLIDS
+from .prid import PRID
+from .viper import VIPeR
 __factory = {
     'market1501': Market1501,
     'msmt17': MSMT17,
     'mm': MM,
     'dukemtmc': DukeMTMC,
     'ustc': USTC,
+    'grid': GRID,
+    'ilids': iLIDS,
+    'prid': PRID,
+    'viper': VIPeR
 }
 
 def train_collate_fn(batch):
@@ -36,6 +44,7 @@ def val_collate_fn(batch):
     camids_batch = torch.tensor(camids, dtype=torch.int64)
     return torch.stack(imgs, dim=0), pids, camids, camids_batch, viewids, img_paths
 
+# 按照cfg的要求构造数据集，以返回dataloader和统计信息
 def make_dataloader(cfg):
     train_transforms = T.Compose([
             T.Resize(cfg.INPUT.SIZE_TRAIN, interpolation=3),
@@ -58,8 +67,15 @@ def make_dataloader(cfg):
     if cfg.DATASETS.NAMES == 'ourapi':
         dataset = OURAPI(root_train=cfg.DATASETS.ROOT_TRAIN_DIR, root_val=cfg.DATASETS.ROOT_VAL_DIR, config=cfg)
     else:
+        # 数据集默认走这里，训练集和测试集，以及基本信息全部在dataset中
         dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR)
 
+    # 改此处，将数据集改成自定义的形式
+    """
+    将source和target分成两个配置
+    多个source，到一个target(无法检测是否过拟合)
+    是否支持combine all
+    """
     train_set = ImageDataset(dataset.train, train_transforms)
     train_set_normal = ImageDataset(dataset.train, val_transforms)
     num_classes = dataset.num_train_pids
@@ -81,6 +97,7 @@ def make_dataloader(cfg):
                 pin_memory=True,
             )
         else:
+            # 训练集默认走这里
             train_loader = DataLoader(
                 train_set, batch_size=cfg.SOLVER.IMS_PER_BATCH,
                 sampler=RandomIdentitySampler(dataset.train, cfg.SOLVER.IMS_PER_BATCH, cfg.DATALOADER.NUM_INSTANCE),
@@ -113,3 +130,69 @@ def make_dataloader(cfg):
         collate_fn=val_collate_fn
     )
     return train_loader, train_loader_normal, val_loader, len(dataset.query), num_classes, cam_num, view_num
+
+
+# _C.DATASETS.NAMES = ('market1501')
+# # 支持多个源域
+# _C.DATASETS.SOURCE_NAMES = ['market1501']
+# # 支持多个目标域（按照指定频率保存和测试模型，不用best）
+# _C.DATASETS.TARGET_NAMES = ['market1501']
+# test：直接调用多次make_dataloader，返回数组即可，因为外层可以for循环
+# train：多个dataset需要合并成一个训练，需要先合并再返回一个dataloader
+def make_multi_dataloader(cfg, isTrain=True):
+    num_workers = cfg.DATALOADER.NUM_WORKERS
+    if not isTrain:
+        val_transforms = T.Compose([
+            T.Resize(cfg.INPUT.SIZE_TEST),
+            T.ToTensor(),
+            T.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD)
+        ])
+        val_loaders = []
+        num_querys = []
+        for data_name in cfg.DATASETS.TARGET_NAMES:
+            dataset = __factory[data_name](root=cfg.DATASETS.ROOT_DIR)
+            val_set = ImageDataset(dataset.query + dataset.gallery, val_transforms)
+            val_loader = DataLoader(
+                val_set, batch_size=cfg.TEST.IMS_PER_BATCH, shuffle=False, num_workers=num_workers,
+                collate_fn=val_collate_fn
+            )
+            val_loaders.append(val_loader)
+            num_querys.append(len(dataset.query))
+        return None, None, val_loaders, num_querys, None, None, None
+    else:
+        train_transforms = T.Compose([
+            T.Resize(cfg.INPUT.SIZE_TRAIN, interpolation=3),
+            T.RandomHorizontalFlip(p=cfg.INPUT.PROB),
+            T.Pad(cfg.INPUT.PADDING),
+            T.RandomCrop(cfg.INPUT.SIZE_TRAIN),
+            T.ToTensor(),
+            T.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD),
+            RandomErasing(probability=cfg.INPUT.RE_PROB, mode='pixel', max_count=1, device='cpu'),
+        ])
+        print('=> Loading train (source) dataset')
+        trainset = []
+        # cam_num = 0
+        # num_classes = 0
+        for data_name in cfg.DATASETS.SOURCE_NAMES:
+            dataset = __factory[data_name](root=cfg.DATASETS.ROOT_DIR) 
+            # num_classes += dataset.num_train_pids
+            # cam_num += dataset.num_train_cams
+            # view_num = dataset.num_train_vids
+            train_set = ImageDataset(dataset.train, train_transforms, dataset.num_train_pids, dataset.num_train_cams)
+            trainset.append(train_set)
+        dataset = sum(trainset)
+        # train_set = ImageDataset(dataset.train, train_transforms)
+        # num_classes = dataset.num_train_pids
+        # cam_num = dataset.num_train_cams
+        # view_num = dataset.num_train_vids
+        train_loader = DataLoader(
+                dataset, batch_size=cfg.SOLVER.IMS_PER_BATCH,
+                sampler=RandomIdentitySampler(dataset.dataset, cfg.SOLVER.IMS_PER_BATCH, cfg.DATALOADER.NUM_INSTANCE),
+                num_workers=num_workers, collate_fn=train_collate_fn
+            )
+        # from IPython import embed
+        # embed()
+        _, _, val_loaders, num_querys, _, _, _ =  make_multi_dataloader(cfg, False)
+        return train_loader, None, val_loaders, num_querys, dataset.num_train_pids, dataset.num_train_cams, 1
+
+

@@ -25,6 +25,8 @@ class Market1501(BaseImageDataset):
     """
     dataset_dir = 'market1501'
 
+    # pid_begin是mm.py将market和msmt合起来的时候用的，改成multidomain之后就用不到了（删掉）
+    # 应该支持combineall
     def __init__(self, root='', verbose=True, pid_begin = 0, **kwargs):
         super(Market1501, self).__init__()
         self.dataset_dir = osp.join(root, self.dataset_dir)

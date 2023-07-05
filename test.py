@@ -1,7 +1,7 @@
 import os
 from config import cfg
 import argparse
-from datasets import make_dataloader
+from datasets import make_dataloader, make_multi_dataloader
 from model import make_model
 from processor import do_inference
 from utils.logger import setup_logger
@@ -40,9 +40,10 @@ if __name__ == "__main__":
 
     os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
 
-    train_loader, train_loader_normal, val_loader, num_query, num_classes, camera_num, view_num = make_dataloader(cfg)
-
-    model = make_model(cfg, num_class=num_classes, camera_num=camera_num, view_num = view_num, semantic_weight = cfg.MODEL.SEMANTIC_WEIGHT)
+    # train_loader, train_loader_normal, val_loader, num_query, num_classes, camera_num, view_num = make_dataloader(cfg)
+    train_loader, train_loader_normal, val_loader, num_query, num_classes, camera_num, view_num = make_multi_dataloader(cfg, isTrain=False)
+    # 测试的时候用不到分类器，class数量随便设置一个即可
+    model = make_model(cfg, num_class=1, camera_num=camera_num, view_num = view_num, semantic_weight = cfg.MODEL.SEMANTIC_WEIGHT)
     if cfg.TEST.WEIGHT != '':
         model.load_param(cfg.TEST.WEIGHT)
 
@@ -63,8 +64,9 @@ if __name__ == "__main__":
             logger.info("rank_1:{}, rank_5 {} : trial : {}".format(rank_1, rank5, trial))
         logger.info("sum_rank_1:{:.1%}, sum_rank_5 {:.1%}".format(all_rank_1.sum()/10.0, all_rank_5.sum()/10.0))
     else:
-       do_inference(cfg,
-                 model,
-                 val_loader,
-                 num_query)
+       for vl, nq in zip(val_loader,num_query):
+            do_inference(cfg,
+                        model,
+                        vl,
+                        nq)
 

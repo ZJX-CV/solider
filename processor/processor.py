@@ -40,14 +40,14 @@ def do_train(cfg,
     loss_meter = AverageMeter()
     acc_meter = AverageMeter()
 
-    evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)
+    # evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)
     scaler = amp.GradScaler()
     # train
     for epoch in range(1, epochs + 1):
         start_time = time.time()
         loss_meter.reset()
         acc_meter.reset()
-        evaluator.reset()
+        # evaluator.reset()
         model.train()
         for n_iter, (img, vid, target_cam, target_view) in tqdm(enumerate(train_loader)):
             optimizer.zero_grad()
@@ -114,36 +114,42 @@ def do_train(cfg,
 
         if epoch % eval_period == 0:
             if cfg.MODEL.DIST_TRAIN:
-                if dist.get_rank() == 0:
-                    model.eval()
-                    for n_iter, (img, vid, camid, camids, target_view, _) in enumerate(val_loader):
-                        with torch.no_grad():
-                            img = img.to(device)
-                            camids = camids.to(device)
-                            target_view = target_view.to(device)
-                            feat, _ = model(img, cam_label=camids, view_label=target_view)
-                            evaluator.update((feat, vid, camid))
-                    cmc, mAP, _, _, _, _, _ = evaluator.compute()
-                    logger.info("Validation Results - Epoch: {}".format(epoch))
-                    logger.info("mAP: {:.1%}".format(mAP))
-                    for r in [1, 5, 10]:
-                        logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
-                    torch.cuda.empty_cache()
+                None
+                # if dist.get_rank() == 0:
+                #     model.eval()
+                #     for n_iter, (img, vid, camid, camids, target_view, _) in enumerate(val_loader):
+                #         with torch.no_grad():
+                #             img = img.to(device)
+                #             camids = camids.to(device)
+                #             target_view = target_view.to(device)
+                #             feat, _ = model(img, cam_label=camids, view_label=target_view)
+                #             evaluator.update((feat, vid, camid))
+                #     cmc, mAP, _, _, _, _, _ = evaluator.compute()
+                #     logger.info("Validation Results - Epoch: {}".format(epoch))
+                #     logger.info("mAP: {:.1%}".format(mAP))
+                #     for r in [1, 5, 10]:
+                #         logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+                #     torch.cuda.empty_cache()
             else:
-                model.eval()
-                for n_iter, (img, vid, camid, camids, target_view, _) in enumerate(val_loader):
-                    with torch.no_grad():
-                        img = img.to(device)
-                        camids = camids.to(device)
-                        target_view = target_view.to(device)
-                        feat, _ = model(img, cam_label=camids, view_label=target_view)
-                        evaluator.update((feat, vid, camid))
-                cmc, mAP, _, _, _, _, _ = evaluator.compute()
-                logger.info("Validation Results - Epoch: {}".format(epoch))
-                logger.info("mAP: {:.1%}".format(mAP))
-                for r in [1, 5, 10]:
-                    logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
-                torch.cuda.empty_cache()
+                # model.eval()
+                # for n_iter, (img, vid, camid, camids, target_view, _) in enumerate(val_loader):
+                #     with torch.no_grad():
+                #         img = img.to(device)
+                #         camids = camids.to(device)
+                #         target_view = target_view.to(device)
+                #         feat, _ = model(img, cam_label=camids, view_label=target_view)
+                #         evaluator.update((feat, vid, camid))
+                # cmc, mAP, _, _, _, _, _ = evaluator.compute()
+                # logger.info("Validation Results - Epoch: {}".format(epoch))
+                # logger.info("mAP: {:.1%}".format(mAP))
+                # for r in [1, 5, 10]:
+                #     logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+                # torch.cuda.empty_cache()
+                for vl, nq in zip(val_loader, num_query):
+                    do_inference(cfg,
+                                model,
+                                vl,
+                                nq)
 
 def do_inference(cfg,
                  model,
@@ -164,7 +170,7 @@ def do_inference(cfg,
         model.to(device)
 
     model.eval()
-    img_path_list = []
+    # img_path_list = []
 
     for n_iter, (img, pid, camid, camids, target_view, imgpath) in tqdm(enumerate(val_loader)):
         with torch.no_grad():
@@ -173,13 +179,14 @@ def do_inference(cfg,
             target_view = target_view.to(device)
             feat , _ = model(img, cam_label=camids, view_label=target_view)
             evaluator.update((feat, pid, camid))
-            img_path_list.extend(imgpath)
+            # img_path_list.extend(imgpath)
 
     cmc, mAP, _, _, _, _, _ = evaluator.compute()
     logger.info("Validation Results ")
     logger.info("mAP: {:.1%}".format(mAP))
     for r in [1, 5, 10]:
         logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+    torch.cuda.empty_cache()
     return cmc[0], cmc[4]
 
 
